@@ -1,6 +1,7 @@
 # FindPackage cmake file for Intel SGX SDK
 
 cmake_minimum_required(VERSION 2.8.8)
+include(CMakeParseArguments)
 
 set(SGX_PATH "$ENV{SGX_SDK}" CACHE PATH "Intel SGX SDK path.")
 if(SGX_PATH STREQUAL "")
@@ -20,7 +21,7 @@ set(SGX_ENCLAVE_SIGNER ${SGX_PATH}/bin/x64/sgx_sign)
 set(SGX_EDGER8R ${SGX_PATH}/bin/x64/sgx_edger8r)
 
 set(SGX_HW ON CACHE BOOL "Run SGX on hardware, OFF for simulation.")
-set(SGX_MODE Debug CACHE STRING "SGX build mode: Debug; PreRelease; Release.")
+set(SGX_MODE PreRelease CACHE STRING "SGX build mode: Debug; PreRelease; Release.")
 
 if(SGX_HW)
     set(SGX_URTS_LIB sgx_urts)
@@ -56,12 +57,34 @@ set(APP_INC_FLAGS "-I${SGX_PATH}/include")
 set(APP_C_FLAGS "${SGX_COMMON_CFLAGS} -fPIC -Wno-attributes ${APP_INC_FLAGS}")
 set(APP_CXX_FLAGS "${APP_C_FLAGS}")
 
-function(add_enclave_library target edl_file edl_search_paths version_script key config srcs)
-    get_filename_component(EDL_NAME ${edl_file} NAME_WE)
-    get_filename_component(EDL_ABSPATH ${edl_file} ABSOLUTE)
+function(add_enclave_library target srcs)
+    set(oneValueArgs EDL EDL_SEARCH_PATHS LDSCRIPT KEY CONFIG)
+    cmake_parse_arguments("SGX" "" "${oneValueArgs}" "" ${ARGN})
+    if("${SGX_EDL}" STREQUAL "")
+        message(FATAL_ERROR "SGX enclave edl file is not provided!")
+    endif()
+    if("${SGX_EDL_SEARCH_PATHS}" STREQUAL "")
+        message(FATAL_ERROR "SGX enclave edl file search paths are not provided!")
+    endif()
+    if("${SGX_LDSCRIPT}" STREQUAL "")
+        message(FATAL_ERROR "SGX enclave ld script is not provided!")
+    endif()
+    if("${SGX_CONFIG}" STREQUAL "")
+        message(FATAL_ERROR "SGX enclave config is not provided!")
+    endif()
+    if("${SGX_KEY}" STREQUAL "")
+        if (NOT SGX_HW OR NOT SGX_MODE STREQUAL "Release")
+            message(FATAL_ERROR "Private key used to sign enclave is not provided!")
+        endif()
+    else()
+        get_filename_component(KEY_ABSPATH ${SGX_KEY} ABSOLUTE)
+    endif()
+
+    get_filename_component(EDL_NAME ${SGX_EDL} NAME_WE)
+    get_filename_component(EDL_ABSPATH ${SGX_EDL} ABSOLUTE)
     set(EDL_T_C "${CMAKE_CURRENT_BINARY_DIR}/${EDL_NAME}_t.c")
-    list(APPEND edl_search_paths "${SGX_PATH}/include")
-    string(REPLACE ";" ":" SEARCH_PATHS "${edl_search_paths}")
+    list(APPEND SGX_EDL_SEARCH_PATHS "${SGX_PATH}/include")
+    string(REPLACE ";" ":" SEARCH_PATHS "${SGX_EDL_SEARCH_PATHS}")
     add_custom_command(OUTPUT ${EDL_T_C}
                        COMMAND ${SGX_EDGER8R} --trusted ${EDL_ABSPATH} --search-path ${SEARCH_PATHS}
                        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
@@ -74,7 +97,7 @@ function(add_enclave_library target edl_file edl_search_paths version_script key
     set_target_properties(${target} PROPERTIES COMPILE_FLAGS ${ENCLAVE_CXX_FLAGS})
     target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
-    get_filename_component(LDS_ABSPATH ${version_script} ABSOLUTE)
+    get_filename_component(LDS_ABSPATH ${SGX_LDSCRIPT} ABSOLUTE)
     target_link_libraries(${target} "${SGX_COMMON_CFLAGS} \
         -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L${SGX_LIBRARY_PATH} \
         -Wl,--whole-archive -l${SGX_TRTS_LIB} -Wl,--no-whole-archive \
@@ -84,20 +107,37 @@ function(add_enclave_library target edl_file edl_search_paths version_script key
         -Wl,--defsym,__ImageBase=0 \
         -Wl,--version-script=${LDS_ABSPATH}")
 
-    get_filename_component(KEY_ABSPATH ${key} ABSOLUTE)
-    get_filename_component(CONFIG_ABSPATH ${config} ABSOLUTE)
-    add_custom_target(${target}-sign ALL ${SGX_ENCLAVE_SIGNER} sign -key ${KEY_ABSPATH} -config ${CONFIG_ABSPATH}
-                      -enclave $<TARGET_FILE_NAME:${target}> -out "${target}.signed.so"
-                      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-
+    get_filename_component(CONFIG_ABSPATH ${SGX_CONFIG} ABSOLUTE)
+    if(SGX_HW AND SGX_MODE STREQUAL "Release")
+        add_custom_target(${target}-sign ALL
+                          COMMAND ${SGX_ENCLAVE_SIGNER} gendata -config ${CONFIG_ABSPATH}
+                              -enclave $<TARGET_FILE_NAME:${target}> -out "${target}_hash.hex"
+                          COMMAND ${CMAKE_COMMAND} -E cmake_echo_color
+                              --cyan "SGX production enclave first step signing finished, \
+use ${CMAKE_CURRENT_BINARY_DIR}/${target}_hash.hex for second step"
+                          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    else()
+        add_custom_target(${target}-sign ALL ${SGX_ENCLAVE_SIGNER} sign -key ${KEY_ABSPATH} -config ${CONFIG_ABSPATH}
+                          -enclave $<TARGET_FILE_NAME:${target}> -out "${target}.signed.so"
+                          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    endif()
 endfunction()
 
-function(add_untrusted_executable target edl_file edl_search_paths srcs)
-    get_filename_component(EDL_NAME ${edl_file} NAME_WE)
-    get_filename_component(EDL_ABSPATH ${edl_file} ABSOLUTE)
+function(add_untrusted_executable target srcs)
+    set(oneValueArgs EDL EDL_SEARCH_PATHS)
+    cmake_parse_arguments("SGX" "" "${oneValueArgs}" "" ${ARGN})
+    if("${SGX_EDL}" STREQUAL "")
+        message(FATAL_ERROR "SGX enclave edl file is not provided!")
+    endif()
+    if("${SGX_EDL_SEARCH_PATHS}" STREQUAL "")
+        message(FATAL_ERROR "SGX enclave edl file search paths are not provided!")
+    endif()
+
+    get_filename_component(EDL_NAME ${SGX_EDL} NAME_WE)
+    get_filename_component(EDL_ABSPATH ${SGX_EDL} ABSOLUTE)
     set(EDL_U_C "${CMAKE_CURRENT_BINARY_DIR}/${EDL_NAME}_u.c")
-    list(APPEND edl_search_paths "${SGX_PATH}/include")
-    string(REPLACE ";" ":" SEARCH_PATHS "${edl_search_paths}")
+    list(APPEND SGX_EDL_SEARCH_PATHS "${SGX_PATH}/include")
+    string(REPLACE ";" ":" SEARCH_PATHS "${SGX_EDL_SEARCH_PATHS}")
     add_custom_command(OUTPUT ${EDL_U_C}
                        COMMAND ${SGX_EDGER8R} --untrusted ${EDL_ABSPATH} --search-path ${SEARCH_PATHS}
                        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

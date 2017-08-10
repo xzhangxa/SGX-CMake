@@ -13,8 +13,8 @@ if(SGX_HW AND SGX_MODE STREQUAL "Release")
 else()
     set(LDS Enclave/Enclave_debug.lds)
 endif()
-add_enclave_library(enclave Enclave/Enclave.edl "${EDL_SEARCH_PATHS}" ${LDS}
-                    Enclave/Enclave_private.pem Enclave/Enclave.config.xml "${E_SRCS}")
+add_enclave_library(enclave "${E_SRCS}" EDL Enclave/Enclave.edl EDL_SEARCH_PATHS "${EDL_SEARCH_PATHS}" LDSCRIPT ${LDS}
+                    KEY Enclave/Enclave_private.pem CONFIG Enclave/Enclave.config.xml)
 
 set(SRCS App/App.cpp App/TrustedLibrary/Libcxx.cpp)
-add_untrusted_executable(app Enclave/Enclave.edl "${EDL_SEARCH_PATHS}" "${SRCS}")
+add_untrusted_executable(app "${SRCS}" EDL Enclave/Enclave.edl EDL_SEARCH_PATHS "${EDL_SEARCH_PATHS}")
