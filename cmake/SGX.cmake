@@ -5,7 +5,7 @@ include(CMakeParseArguments)
 
 set(SGX_PATH "$ENV{SGX_SDK}" CACHE PATH "Intel SGX SDK path.")
 if(SGX_PATH STREQUAL "")
-    message(ERROR "Intel SGXSDK environment file is not sourced and SGX SDK path is not set.")
+    message(ERROR "Intel SGX SDK environment file is not sourced and SGX SDK path is not set.")
 endif()
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 4)
@@ -75,6 +75,8 @@ function(_build_edl_obj edl edl_search_paths)
     add_library(${target}-edlobj OBJECT ${EDL_T_C})
     set_target_properties(${target}-edlobj PROPERTIES COMPILE_FLAGS ${ENCLAVE_C_FLAGS})
     target_include_directories(${target}-edlobj PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
+    set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${EDL_NAME}_t.h")
 endfunction()
 
 # build trusted static library to be linked into enclave library
@@ -177,6 +179,9 @@ use ${CMAKE_CURRENT_BINARY_DIR}/${target}_hash.hex for second step"
                           -enclave $<TARGET_FILE_NAME:${target}> -out "${target}.signed.so"
                           WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     endif()
+
+    set(CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${target}.signed.so;${CMAKE_CURRENT_BINARY_DIR}/${target}_hash.hex")
+    set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES "${CLEAN_FILES}")
 endfunction()
 
 function(add_untrusted_executable target srcs)
@@ -216,4 +221,6 @@ function(add_untrusted_executable target srcs)
                                      -l${SGX_USVC_LIB} \
                                      -lsgx_ukey_exchange \
                                      -lpthread")
+
+    set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${EDL_NAME}_u.h")
 endfunction()
