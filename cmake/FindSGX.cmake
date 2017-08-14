@@ -169,14 +169,14 @@ function(enclave_sign target)
     if(SGX_HW AND SGX_MODE STREQUAL "Release")
         add_custom_target(${target}-sign ALL
                           COMMAND ${SGX_ENCLAVE_SIGNER} gendata -config ${CONFIG_ABSPATH}
-                              -enclave $<TARGET_FILE_NAME:${target}> -out "${target}_hash.hex"
+                                  -enclave $<TARGET_FILE:${target}> -out $<TARGET_FILE_DIR:${target}>/${target}_hash.hex
                           COMMAND ${CMAKE_COMMAND} -E cmake_echo_color
                               --cyan "SGX production enclave first step signing finished, \
 use ${CMAKE_CURRENT_BINARY_DIR}/${target}_hash.hex for second step"
                           WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     else()
         add_custom_target(${target}-sign ALL ${SGX_ENCLAVE_SIGNER} sign -key ${KEY_ABSPATH} -config ${CONFIG_ABSPATH}
-                          -enclave $<TARGET_FILE:${target}> -out "${target}.signed.so"
+                          -enclave $<TARGET_FILE:${target}> -out $<TARGET_FILE_DIR:${target}>/${target}.signed.so
                           WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     endif()
 
