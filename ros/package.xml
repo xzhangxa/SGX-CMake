@@ -1,0 +1,12 @@
+<package>
+    <name>sgx_cmake</name>
+    <version>0.0.1</version>
+    <description>CMake file for Intel SGX SDK</description>
+    <maintainer email="zhangxin.xa@gmail.com">Xin Zhang</maintainer>
+    <license>BSD</license>
+
+    <url>http://github.com/zhang-xin/SGX-CMake</url>
+    <author email="zhangxin.xa@gmail.com">Xin Zhang</author>
+
+    <buildtool_depend>catkin</buildtool_depend>
+</package>

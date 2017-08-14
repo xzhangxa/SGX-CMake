@@ -176,7 +176,7 @@ use ${CMAKE_CURRENT_BINARY_DIR}/${target}_hash.hex for second step"
                           WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     else()
         add_custom_target(${target}-sign ALL ${SGX_ENCLAVE_SIGNER} sign -key ${KEY_ABSPATH} -config ${CONFIG_ABSPATH}
-                          -enclave $<TARGET_FILE_NAME:${target}> -out "${target}.signed.so"
+                          -enclave $<TARGET_FILE:${target}> -out "${target}.signed.so"
                           WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     endif()
 

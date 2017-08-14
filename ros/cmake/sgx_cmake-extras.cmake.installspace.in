@@ -1,0 +1,1 @@
+list(APPEND CMAKE_MODULE_PATH "${sgx_cmake_DIR}/../../../@CATKIN_PACKAGE_SHARE_DESTINATION@/cmake")
