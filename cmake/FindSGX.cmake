@@ -80,10 +80,10 @@ function(_build_edl_obj edl edl_search_paths)
 endfunction()
 
 # build trusted static library to be linked into enclave library
-# 'srcs' is list of source files
-function(add_trusted_library target srcs)
-    set(oneValueArgs EDL EDL_SEARCH_PATHS LDSCRIPT)
-    cmake_parse_arguments("SGX" "" "${oneValueArgs}" "" ${ARGN})
+function(add_trusted_library target)
+    set(oneValueArgs EDL LDSCRIPT)
+    set(multiValueArgs SRCS EDL_SEARCH_PATHS)
+    cmake_parse_arguments("SGX" "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
     if("${SGX_EDL}" STREQUAL "")
         message(FATAL_ERROR "${target}: SGX enclave edl file is not provided!")
     endif()
@@ -97,7 +97,7 @@ function(add_trusted_library target srcs)
 
     _build_edl_obj(${SGX_EDL} ${SGX_EDL_SEARCH_PATHS})
 
-    add_library(${target} STATIC ${srcs} $<TARGET_OBJECTS:${target}-edlobj>)
+    add_library(${target} STATIC ${SGX_SRCS} $<TARGET_OBJECTS:${target}-edlobj>)
     set_target_properties(${target} PROPERTIES COMPILE_FLAGS ${ENCLAVE_CXX_FLAGS})
     target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
@@ -112,11 +112,10 @@ function(add_trusted_library target srcs)
 endfunction()
 
 # build enclave shared library
-# 'srcs' is list of source files
-# 'trusted_libs' is list of trusted libraries to be built in enclave
-function(add_enclave_library target srcs trusted_libs)
-    set(oneValueArgs EDL EDL_SEARCH_PATHS LDSCRIPT)
-    cmake_parse_arguments("SGX" "" "${oneValueArgs}" "" ${ARGN})
+function(add_enclave_library target)
+    set(oneValueArgs EDL LDSCRIPT)
+    set(multiValueArgs SRCS TRUSTED_LIBS EDL_SEARCH_PATHS)
+    cmake_parse_arguments("SGX" "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
     if("${SGX_EDL}" STREQUAL "")
         message(FATAL_ERROR "${target}: SGX enclave edl file is not provided!")
     endif()
@@ -130,12 +129,12 @@ function(add_enclave_library target srcs trusted_libs)
 
     _build_edl_obj(${SGX_EDL} ${SGX_EDL_SEARCH_PATHS})
 
-    add_library(${target} SHARED ${srcs} $<TARGET_OBJECTS:${target}-edlobj>)
+    add_library(${target} SHARED ${SGX_SRCS} $<TARGET_OBJECTS:${target}-edlobj>)
     set_target_properties(${target} PROPERTIES COMPILE_FLAGS ${ENCLAVE_CXX_FLAGS})
     target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
     set(TLIB_LIST "")
-    foreach(TLIB ${trusted_libs})
+    foreach(TLIB ${SGX_TRUSTED_LIBS})
         string(APPEND TLIB_LIST "$<TARGET_FILE:${TLIB}> ")
         add_dependencies(${target} ${TLIB})
     endforeach()
@@ -191,9 +190,9 @@ use ${CMAKE_CURRENT_BINARY_DIR}/${target}_hash.hex for second step"
     set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES "${CLEAN_FILES}")
 endfunction()
 
-function(add_untrusted_executable target srcs)
-    set(oneValueArgs EDL EDL_SEARCH_PATHS)
-    cmake_parse_arguments("SGX" "" "${oneValueArgs}" "" ${ARGN})
+function(add_untrusted_executable target)
+    set(multiValueArgs SRCS EDL EDL_SEARCH_PATHS)
+    cmake_parse_arguments("SGX" "" "" "${multiValueArgs}" ${ARGN})
     if("${SGX_EDL}" STREQUAL "")
         message(FATAL_ERROR "SGX enclave edl file is not provided!")
     endif()
@@ -201,25 +200,26 @@ function(add_untrusted_executable target srcs)
         message(FATAL_ERROR "SGX enclave edl file search paths are not provided!")
     endif()
 
-    get_filename_component(EDL_NAME ${SGX_EDL} NAME_WE)
-    get_filename_component(EDL_ABSPATH ${SGX_EDL} ABSOLUTE)
-    set(EDL_U_C "${CMAKE_CURRENT_BINARY_DIR}/${EDL_NAME}_u.c")
-    set(SEARCH_PATHS "")
-    foreach(path ${SGX_EDL_SEARCH_PATHS})
-        get_filename_component(ABSPATH ${path} ABSOLUTE)
-        list(APPEND SEARCH_PATHS "${ABSPATH}")
+    set(EDL_U_SRCS "")
+    foreach(EDL ${SGX_EDL})
+        get_filename_component(EDL_NAME ${EDL} NAME_WE)
+        get_filename_component(EDL_ABSPATH ${EDL} ABSOLUTE)
+        set(EDL_U_C "${CMAKE_CURRENT_BINARY_DIR}/${EDL_NAME}_u.c")
+        set(SEARCH_PATHS "")
+        foreach(path ${SGX_EDL_SEARCH_PATHS})
+            get_filename_component(ABSPATH ${path} ABSOLUTE)
+            list(APPEND SEARCH_PATHS "${ABSPATH}")
+        endforeach()
+        list(APPEND SEARCH_PATHS "${SGX_PATH}/include")
+        string(REPLACE ";" ":" SEARCH_PATHS "${SEARCH_PATHS}")
+        add_custom_command(OUTPUT ${EDL_U_C}
+                           COMMAND ${SGX_EDGER8R} --untrusted ${EDL_ABSPATH} --search-path ${SEARCH_PATHS}
+                           WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+        list(APPEND EDL_U_SRCS ${EDL_U_C})
     endforeach()
-    list(APPEND SEARCH_PATHS "${SGX_PATH}/include")
-    string(REPLACE ";" ":" SEARCH_PATHS "${SEARCH_PATHS}")
-    add_custom_command(OUTPUT ${EDL_U_C}
-                       COMMAND ${SGX_EDGER8R} --untrusted ${EDL_ABSPATH} --search-path ${SEARCH_PATHS}
-                       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
-    add_library(EDL_U_O OBJECT ${EDL_U_C})
-    set_target_properties(EDL_U_O PROPERTIES COMPILE_FLAGS ${APP_C_FLAGS})
-    target_include_directories(EDL_U_O PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-
-    add_executable(${target} ${srcs} $<TARGET_OBJECTS:EDL_U_O>)
+    add_executable(${target} ${SGX_SRCS} ${EDL_U_SRCS})
     set_target_properties(${target} PROPERTIES COMPILE_FLAGS ${APP_CXX_FLAGS})
     target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
     target_link_libraries(${target} "${SGX_COMMON_CFLAGS} \
