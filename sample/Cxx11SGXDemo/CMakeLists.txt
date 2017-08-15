@@ -1,5 +1,3 @@
-include(${CMAKE_SOURCE_DIR}/cmake/FindSGX.cmake)
-
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 set(EDL_SEARCH_PATHS Enclave Enclave/TrustedLibrary)
@@ -16,4 +14,4 @@ add_enclave_library(enclave SRCS ${E_SRCS} TRUSTED_LIBS trusted_lib EDL Enclave/
 enclave_sign(enclave KEY Enclave/Enclave_private.pem CONFIG Enclave/Enclave.config.xml)
 
 set(SRCS App/App.cpp App/TrustedLibrary/Libcxx.cpp)
-add_untrusted_executable(app SRCS ${SRCS} EDL Enclave/Enclave.edl EDL_SEARCH_PATHS ${EDL_SEARCH_PATHS})
+add_untrusted_executable(Cxx11SGXDemo SRCS ${SRCS} EDL Enclave/Enclave.edl EDL_SEARCH_PATHS ${EDL_SEARCH_PATHS})
