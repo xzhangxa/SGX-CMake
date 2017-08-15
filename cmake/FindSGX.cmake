@@ -150,8 +150,10 @@ function(add_enclave_library target srcs trusted_libs)
         -Wl,--defsym,__ImageBase=0")
 endfunction()
 
+# sign the enclave, according to configurations one-step or two-step signing will be performed.
+# default one-step signing output enclave name is target.signed.so, change it with OUTPUT option.
 function(enclave_sign target)
-    set(oneValueArgs KEY CONFIG)
+    set(oneValueArgs KEY CONFIG OUTPUT)
     cmake_parse_arguments("SGX" "" "${oneValueArgs}" "" ${ARGN})
     if("${SGX_CONFIG}" STREQUAL "")
         message(FATAL_ERROR "${target}: SGX enclave config is not provided!")
@@ -162,6 +164,11 @@ function(enclave_sign target)
         endif()
     else()
         get_filename_component(KEY_ABSPATH ${SGX_KEY} ABSOLUTE)
+    endif()
+    if("${SGX_OUTPUT}" STREQUAL "")
+        set(OUTPUT_NAME "${target}.signed.so")
+    else()
+        set(OUTPUT_NAME ${SGX_OUTPUT})
     endif()
 
     get_filename_component(CONFIG_ABSPATH ${SGX_CONFIG} ABSOLUTE)
@@ -176,11 +183,11 @@ use ${CMAKE_CURRENT_BINARY_DIR}/${target}_hash.hex for second step"
                           WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     else()
         add_custom_target(${target}-sign ALL ${SGX_ENCLAVE_SIGNER} sign -key ${KEY_ABSPATH} -config ${CONFIG_ABSPATH}
-                          -enclave $<TARGET_FILE:${target}> -out $<TARGET_FILE_DIR:${target}>/${target}.signed.so
+                          -enclave $<TARGET_FILE:${target}> -out $<TARGET_FILE_DIR:${target}>/${OUTPUT_NAME}
                           WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     endif()
 
-    set(CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${target}.signed.so;${CMAKE_CURRENT_BINARY_DIR}/${target}_hash.hex")
+    set(CLEAN_FILES "$<TARGET_FILE_DIR:${target}>/${OUTPUT_NAME};$<TARGET_FILE_DIR:${target}>/${target}_hash.hex")
     set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES "${CLEAN_FILES}")
 endfunction()
 
