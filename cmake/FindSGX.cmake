@@ -216,6 +216,52 @@ if(SGX_FOUND)
         set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES "${CLEAN_FILES}")
     endfunction()
 
+    function(add_untrusted_library target mode)
+        set(optionArgs USE_PREFIX)
+        set(multiValueArgs SRCS EDL EDL_SEARCH_PATHS)
+        cmake_parse_arguments("SGX" "${optionArgs}" "" "${multiValueArgs}" ${ARGN})
+        if("${SGX_EDL}" STREQUAL "")
+            message(FATAL_ERROR "SGX enclave edl file is not provided!")
+        endif()
+        if("${SGX_EDL_SEARCH_PATHS}" STREQUAL "")
+            message(FATAL_ERROR "SGX enclave edl file search paths are not provided!")
+        endif()
+
+        set(EDL_U_SRCS "")
+        foreach(EDL ${SGX_EDL})
+            get_filename_component(EDL_NAME ${EDL} NAME_WE)
+            get_filename_component(EDL_ABSPATH ${EDL} ABSOLUTE)
+            set(EDL_U_C "${CMAKE_CURRENT_BINARY_DIR}/${EDL_NAME}_u.c")
+            set(SEARCH_PATHS "")
+            foreach(path ${SGX_EDL_SEARCH_PATHS})
+                get_filename_component(ABSPATH ${path} ABSOLUTE)
+                list(APPEND SEARCH_PATHS "${ABSPATH}")
+            endforeach()
+            list(APPEND SEARCH_PATHS "${SGX_PATH}/include")
+            string(REPLACE ";" ":" SEARCH_PATHS "${SEARCH_PATHS}")
+            if(${SGX_USE_PREFIX})
+                set(USE_PREFIX "--use-prefix")
+            endif()
+            add_custom_command(OUTPUT ${EDL_U_C}
+                               COMMAND ${SGX_EDGER8R} ${USE_PREFIX} --untrusted ${EDL_ABSPATH} --search-path ${SEARCH_PATHS}
+                               WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+            list(APPEND EDL_U_SRCS ${EDL_U_C})
+        endforeach()
+
+        add_library(${target} ${mode} ${SGX_SRCS} ${EDL_U_SRCS})
+        set_target_properties(${target} PROPERTIES COMPILE_FLAGS ${APP_CXX_FLAGS})
+        target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+        target_link_libraries(${target} "${SGX_COMMON_CFLAGS} \
+                                         -L${SGX_LIBRARY_PATH} \
+                                         -l${SGX_URTS_LIB} \
+                                         -l${SGX_USVC_LIB} \
+                                         -lsgx_ukey_exchange \
+                                         -lpthread")
+
+        set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${EDL_NAME}_u.h")
+    endfunction()
+
     function(add_untrusted_executable target)
         set(optionArgs USE_PREFIX)
         set(multiValueArgs SRCS EDL EDL_SEARCH_PATHS)
