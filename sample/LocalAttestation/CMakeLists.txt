@@ -1,6 +1,6 @@
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
-include_directories(/opt/intel/sgxsdk/include Include Enclave1 Enclave2 Enclave3 LocalAttestationCode Untrusted_LocalAttestation)
+include_directories(${SGX_INCLUDE_DIR} Include Enclave1 Enclave2 Enclave3 LocalAttestationCode Untrusted_LocalAttestation)
 set(EDL_SEARCH_PATHS LocalAttestationCode Enclave1 Enclave2 Enclave3)
 
 file(GLOB U_SRCS Untrusted_LocalAttestation/*.cpp)
