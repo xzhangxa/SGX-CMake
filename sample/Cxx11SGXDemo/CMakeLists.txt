@@ -15,3 +15,4 @@ enclave_sign(enclave KEY Enclave/Enclave_private.pem CONFIG Enclave/Enclave.conf
 
 set(SRCS App/App.cpp App/TrustedLibrary/Libcxx.cpp)
 add_untrusted_executable(Cxx11SGXDemo SRCS ${SRCS} EDL Enclave/Enclave.edl EDL_SEARCH_PATHS ${EDL_SEARCH_PATHS})
+add_dependencies(Cxx11SGXDemo enclave-sign)
