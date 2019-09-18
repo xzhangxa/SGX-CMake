@@ -41,3 +41,4 @@ add_untrusted_executable(LocalAttestation
                          EDL Enclave1/Enclave1.edl Enclave2/Enclave2.edl Enclave3/Enclave3.edl
                          EDL_SEARCH_PATHS ${EDL_SEARCH_PATHS})
 target_link_libraries(LocalAttestation UntrustedLocalAttestation)
+add_dependencies(LocalAttestation Enclave1-sign Enclave2-sign Enclave3-sign)
