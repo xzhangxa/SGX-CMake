@@ -278,6 +278,7 @@ if(SGX_FOUND)
             get_filename_component(EDL_NAME ${EDL} NAME_WE)
             get_filename_component(EDL_ABSPATH ${EDL} ABSOLUTE)
             set(EDL_U_C "${CMAKE_CURRENT_BINARY_DIR}/${EDL_NAME}_u.c")
+            set(EDL_U_H "${CMAKE_CURRENT_BINARY_DIR}/${EDL_NAME}_u.h")
             set(SEARCH_PATHS "")
             foreach(path ${SGX_EDL_SEARCH_PATHS})
                 get_filename_component(ABSPATH ${path} ABSOLUTE)
@@ -293,6 +294,7 @@ if(SGX_FOUND)
                                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
             list(APPEND EDL_U_SRCS ${EDL_U_C})
+            list(APPEND EDL_U_HDRS ${EDL_U_H})
         endforeach()
 
         add_executable(${target} ${SGX_SRCS} ${EDL_U_SRCS})
@@ -304,8 +306,7 @@ if(SGX_FOUND)
                                          -l${SGX_USVC_LIB} \
                                          -lsgx_ukey_exchange \
                                          -lpthread")
-
-        set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${EDL_NAME}_u.h")
+        set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${EDL_U_HDRS})
     endfunction()
 
 else(SGX_FOUND)
