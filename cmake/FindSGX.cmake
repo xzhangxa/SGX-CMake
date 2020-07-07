@@ -181,7 +181,9 @@ if(SGX_FOUND)
         set(oneValueArgs KEY CONFIG OUTPUT)
         cmake_parse_arguments("SGX" "" "${oneValueArgs}" "" ${ARGN})
         if("${SGX_CONFIG}" STREQUAL "")
-            message(FATAL_ERROR "${target}: SGX enclave config is not provided!")
+            message(WARNING "${target}: SGX enclave config is not provided!")
+        else()
+            get_filename_component(CONFIG_ABSPATH ${SGX_CONFIG} ABSOLUTE)
         endif()
         if("${SGX_KEY}" STREQUAL "")
             if (NOT SGX_HW OR NOT SGX_MODE STREQUAL "Release")
@@ -196,19 +198,20 @@ if(SGX_FOUND)
             set(OUTPUT_NAME ${SGX_OUTPUT})
         endif()
 
-        get_filename_component(CONFIG_ABSPATH ${SGX_CONFIG} ABSOLUTE)
-
         if(SGX_HW AND SGX_MODE STREQUAL "Release")
             add_custom_target(${target}-sign ALL
-                              COMMAND ${SGX_ENCLAVE_SIGNER} gendata -config ${CONFIG_ABSPATH}
+                              COMMAND ${SGX_ENCLAVE_SIGNER} gendata
+                                      $<$<NOT:$<STREQUAL:${SGX_CONFIG},>>:-config> $<$<NOT:$<STREQUAL:${SGX_CONFIG},>>:${CONFIG_ABSPATH}>
                                       -enclave $<TARGET_FILE:${target}> -out $<TARGET_FILE_DIR:${target}>/${target}_hash.hex
                               COMMAND ${CMAKE_COMMAND} -E cmake_echo_color
                                   --cyan "SGX production enclave first step signing finished, \
     use ${CMAKE_CURRENT_BINARY_DIR}/${target}_hash.hex for second step"
                               WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
         else()
-            add_custom_target(${target}-sign ALL ${SGX_ENCLAVE_SIGNER} sign -key ${KEY_ABSPATH} -config ${CONFIG_ABSPATH}
-                              -enclave $<TARGET_FILE:${target}> -out $<TARGET_FILE_DIR:${target}>/${OUTPUT_NAME}
+            add_custom_target(${target}-sign ALL ${SGX_ENCLAVE_SIGNER} sign -key ${KEY_ABSPATH}
+                              $<$<NOT:$<STREQUAL:${SGX_CONFIG},>>:-config> $<$<NOT:$<STREQUAL:${SGX_CONFIG},>>:${CONFIG_ABSPATH}>
+                              -enclave $<TARGET_FILE:${target}>
+                              -out $<TARGET_FILE_DIR:${target}>/${OUTPUT_NAME}
                               WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
         endif()
 
