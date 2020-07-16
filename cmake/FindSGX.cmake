@@ -94,6 +94,7 @@ if(SGX_FOUND)
         endif()
         add_custom_command(OUTPUT ${EDL_T_C}
                            COMMAND ${SGX_EDGER8R} ${USE_PREFIX} --trusted ${EDL_ABSPATH} --search-path ${SEARCH_PATHS}
+                           MAIN_DEPENDENCY ${EDL_ABSPATH}
                            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
         add_library(${target}-edlobj OBJECT ${EDL_T_C})
