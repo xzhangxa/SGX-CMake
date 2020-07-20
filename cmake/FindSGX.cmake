@@ -248,6 +248,7 @@ if(SGX_FOUND)
             endif()
             add_custom_command(OUTPUT ${EDL_U_C}
                                COMMAND ${SGX_EDGER8R} ${USE_PREFIX} --untrusted ${EDL_ABSPATH} --search-path ${SEARCH_PATHS}
+                               MAIN_DEPENDENCY ${EDL_ABSPATH}
                                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
             list(APPEND EDL_U_SRCS ${EDL_U_C})
@@ -295,6 +296,7 @@ if(SGX_FOUND)
             endif()
             add_custom_command(OUTPUT ${EDL_U_C}
                                COMMAND ${SGX_EDGER8R} ${USE_PREFIX} --untrusted ${EDL_ABSPATH} --search-path ${SEARCH_PATHS}
+                               MAIN_DEPENDENCY ${EDL_ABSPATH}
                                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
             list(APPEND EDL_U_SRCS ${EDL_U_C})
