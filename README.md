@@ -47,7 +47,9 @@ add_trusted_library(target
 # default one-step signing output enclave name is target.signed.so, change it with OUTPUT option.
 enclave_sign(target
              KEY key
-             CONFIG config
+	     [IGNORE_INIT]
+	     [IGNORE_REL]
+             [CONFIG config]
              [OUTPUT file_name])
 
 # build untrusted executable to run with enclave
