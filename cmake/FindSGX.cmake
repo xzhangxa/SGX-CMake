@@ -179,8 +179,9 @@ if(SGX_FOUND)
     # sign the enclave, according to configurations one-step or two-step signing will be performed.
     # default one-step signing output enclave name is target.signed.so, change it with OUTPUT option.
     function(enclave_sign target)
+        set(optionArgs IGNORE_INIT IGNORE_REL)
         set(oneValueArgs KEY CONFIG OUTPUT)
-        cmake_parse_arguments("SGX" "" "${oneValueArgs}" "" ${ARGN})
+        cmake_parse_arguments("SGX" "${optionArgs}" "${oneValueArgs}" "" ${ARGN})
         if("${SGX_CONFIG}" STREQUAL "")
             message("${target}: SGX enclave config is not provided!")
         else()
@@ -198,12 +199,18 @@ if(SGX_FOUND)
         else()
             set(OUTPUT_NAME ${SGX_OUTPUT})
         endif()
+	if(${SGX_IGNORE_INIT})
+	    set(IGN_INIT "-ignore-init-sec-error")
+	endif()
+	if(${SGX_IGNORE_REL})
+	    set(IGN_REL "-ignore-rel-error")
+	endif()
 
         if(SGX_HW AND SGX_MODE STREQUAL "Release")
             add_custom_target(${target}-sign ALL
                               COMMAND ${SGX_ENCLAVE_SIGNER} gendata
                                       $<$<NOT:$<STREQUAL:${SGX_CONFIG},>>:-config> $<$<NOT:$<STREQUAL:${SGX_CONFIG},>>:${CONFIG_ABSPATH}>
-                                      -enclave $<TARGET_FILE:${target}> -out $<TARGET_FILE_DIR:${target}>/${target}_hash.hex
+                                      -enclave $<TARGET_FILE:${target}> -out $<TARGET_FILE_DIR:${target}>/${target}_hash.hex ${IGN_INIT} ${IGN_REL}
                               COMMAND ${CMAKE_COMMAND} -E cmake_echo_color
                                   --cyan "SGX production enclave first step signing finished, \
     use ${CMAKE_CURRENT_BINARY_DIR}/${target}_hash.hex for second step"
@@ -213,6 +220,7 @@ if(SGX_FOUND)
                               $<$<NOT:$<STREQUAL:${SGX_CONFIG},>>:-config> $<$<NOT:$<STREQUAL:${SGX_CONFIG},>>:${CONFIG_ABSPATH}>
                               -enclave $<TARGET_FILE:${target}>
                               -out $<TARGET_FILE_DIR:${target}>/${OUTPUT_NAME}
+			      ${IGN_INIT} ${IGN_REL}
                               WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
         endif()
 
