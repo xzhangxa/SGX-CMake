@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 2.8.11) # target_include_directories
 include(CMakeParseArguments)
 
 set(SGX_FOUND "NO")
+set(SGXSSL_FOUND "NO")
 
 if(EXISTS SGX_DIR)
     set(SGX_PATH ${SGX_DIR})
@@ -42,6 +43,31 @@ if(SGX_INCLUDE_DIR AND SGX_LIBRARY_DIR)
     set(SGX_INCLUDE_DIRS ${SGX_INCLUDE_DIR} ${SGX_TLIBC_INCLUDE_DIR} ${SGX_LIBCXX_INCLUDE_DIR})
     mark_as_advanced(SGX_INCLUDE_DIR SGX_TLIBC_INCLUDE_DIR SGX_LIBCXX_INCLUDE_DIR SGX_LIBRARY_DIR)
     message(STATUS "Found Intel SGX SDK.")
+endif()
+
+if(EXISTS SGXSSL_DIR)
+    set(SGXSSL_PATH ${SGXSSL_DIR})
+elseif(EXISTS SGXSSL_ROOT)
+    set(SGXSSL_PATH ${SGXSSL_ROOT})
+elseif(EXISTS $ENV{SGXSSL})
+    set(SGXSSL_PATH $ENV{SGXSSL})
+elseif(EXISTS $ENV{SGXSSL_DIR})
+    set(SGXSSL_PATH $ENV{SGXSSL_DIR})
+elseif(EXISTS $ENV{SGXSSL_ROOT})
+    set(SGXSSL_PATH $ENV{SGXSSL_ROOT})
+else()
+    set(SGXSSL_PATH "/opt/intel/sgxssl")
+endif()
+
+set(SGXSSL_INCLUDE_PATH ${SGXSSL_PATH}/include)
+set(SGXSSL_LIBRARY_PATH ${SGXSSL_PATH}/lib64)
+find_path(SGXSSL_INCLUDE_DIR tSgxSSL_api.h "${SGXSSL_INCLUDE_PATH}" NO_DEFAULT_PATH)
+find_path(SGXSSL_LIBRARY_DIR libsgx_tsgxssl.a "${SGXSSL_LIBRARY_PATH}" NO_DEFAULT_PATH)
+if(SGXSSL_INCLUDE_DIR AND SGXSSL_LIBRARY_DIR)
+    set(SGXSSL_FOUND "YES")
+    message(STATUS "Found Intel SGX SSL.")
+else()
+    message(STATUS "NOT found Intel SGX SSL.")
 endif()
 
 if(SGX_FOUND)
@@ -106,7 +132,7 @@ if(SGX_FOUND)
 
     # build trusted static library to be linked into enclave library
     function(add_trusted_library target)
-        set(optionArgs USE_PREFIX)
+        set(optionArgs USE_PREFIX USE_SGXSSL)
         set(oneValueArgs EDL LDSCRIPT)
         set(multiValueArgs SRCS EDL_SEARCH_PATHS)
         cmake_parse_arguments("SGX" "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
@@ -124,22 +150,36 @@ if(SGX_FOUND)
             _build_edl_obj(${SGX_EDL} "${SGX_EDL_SEARCH_PATHS}" ${SGX_USE_PREFIX})
             add_library(${target} STATIC ${SGX_SRCS} $<TARGET_OBJECTS:${target}-edlobj>)
         endif()
-        
+
         set_target_properties(${target} PROPERTIES COMPILE_FLAGS ${ENCLAVE_CXX_FLAGS})
         target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_BINARY_DIR} ${ENCLAVE_INC_DIRS})
 
-        target_link_libraries(${target} "${SGX_COMMON_CFLAGS} \
-            -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L${SGX_LIBRARY_PATH} \
-            -Wl,--start-group -lsgx_tstdc -lsgx_tcxx -lsgx_tkey_exchange -lsgx_tcrypto -l${SGX_TSVC_LIB} -Wl,--end-group \
-            -Wl,-Bstatic -Wl,-Bsymbolic -Wl,--no-undefined \
-            -Wl,-pie,-eenclave_entry -Wl,--export-dynamic \
-            ${LDSCRIPT_FLAG} \
-            -Wl,--defsym,__ImageBase=0")
+        if(${SGX_USE_SGXSSL})
+            if(NOT ${SGXSSL_FOUND})
+                message(FATAL_ERROR "SGX SSL not found, cannot build library with USE_SGXSSL")
+            endif()
+            target_include_directories(${target} PRIVATE ${SGXSSL_INCLUDE_PATH})
+            target_link_libraries(${target} "${SGX_COMMON_CFLAGS} \
+                -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L${SGX_LIBRARY_PATH} -L${SGXSSL_LIBRARY_PATH} \
+                -Wl,--start-group -lsgx_tsgxssl -lsgx_tsgxssl_crypto -lsgx_tstdc -lsgx_pthread -lsgx_tcxx -lsgx_tkey_exchange -lsgx_tcrypto -l${SGX_TSVC_LIB} -Wl,--end-group \
+                -Wl,-Bstatic -Wl,-Bsymbolic -Wl,--no-undefined \
+                -Wl,-pie,-eenclave_entry -Wl,--export-dynamic \
+                ${LDSCRIPT_FLAG} \
+                -Wl,--defsym,__ImageBase=0")
+        else()
+            target_link_libraries(${target} "${SGX_COMMON_CFLAGS} \
+                -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L${SGX_LIBRARY_PATH} \
+                -Wl,--start-group -lsgx_tstdc -lsgx_tcxx -lsgx_tkey_exchange -lsgx_tcrypto -l${SGX_TSVC_LIB} -Wl,--end-group \
+                -Wl,-Bstatic -Wl,-Bsymbolic -Wl,--no-undefined \
+                -Wl,-pie,-eenclave_entry -Wl,--export-dynamic \
+                ${LDSCRIPT_FLAG} \
+                -Wl,--defsym,__ImageBase=0")
+        endif()
     endfunction()
 
     # build enclave shared library
     function(add_enclave_library target)
-        set(optionArgs USE_PREFIX)
+        set(optionArgs USE_PREFIX USE_SGXSSL)
         set(oneValueArgs EDL LDSCRIPT)
         set(multiValueArgs SRCS TRUSTED_LIBS EDL_SEARCH_PATHS)
         cmake_parse_arguments("SGX" "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
@@ -166,14 +206,29 @@ if(SGX_FOUND)
             add_dependencies(${target} ${TLIB})
         endforeach()
 
-        target_link_libraries(${target} "${SGX_COMMON_CFLAGS} \
-            -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L${SGX_LIBRARY_PATH} \
-            -Wl,--whole-archive -l${SGX_TRTS_LIB} -Wl,--no-whole-archive \
-            -Wl,--start-group ${TLIB_LIST} -lsgx_tstdc -lsgx_tcxx -lsgx_tkey_exchange -lsgx_tcrypto -l${SGX_TSVC_LIB} -Wl,--end-group \
-            -Wl,-Bstatic -Wl,-Bsymbolic -Wl,--no-undefined \
-            -Wl,-pie,-eenclave_entry -Wl,--export-dynamic \
-            ${LDSCRIPT_FLAG} \
-            -Wl,--defsym,__ImageBase=0")
+        if(${SGX_USE_SGXSSL})
+            if(NOT ${SGXSSL_FOUND})
+                message(FATAL_ERROR "SGX SSL not found, cannot build library with USE_SGXSSL")
+            endif()
+            target_include_directories(${target} PRIVATE ${SGXSSL_INCLUDE_PATH})
+            target_link_libraries(${target} "${SGX_COMMON_CFLAGS} \
+                -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L${SGX_LIBRARY_PATH} -L${SGXSSL_LIBRARY_PATH} \
+                -Wl,--whole-archive -l${SGX_TRTS_LIB} -Wl,--no-whole-archive \
+                -Wl,--start-group ${TLIB_LIST} -lsgx_tsgxssl -lsgx_tsgxssl_crypto -lsgx_tstdc -lsgx_pthread -lsgx_tcxx -lsgx_tkey_exchange -lsgx_tcrypto -l${SGX_TSVC_LIB} -Wl,--end-group \
+                -Wl,-Bstatic -Wl,-Bsymbolic -Wl,--no-undefined \
+                -Wl,-pie,-eenclave_entry -Wl,--export-dynamic \
+                ${LDSCRIPT_FLAG} \
+                -Wl,--defsym,__ImageBase=0")
+        else()
+            target_link_libraries(${target} "${SGX_COMMON_CFLAGS} \
+                -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L${SGX_LIBRARY_PATH} \
+                -Wl,--whole-archive -l${SGX_TRTS_LIB} -Wl,--no-whole-archive \
+                -Wl,--start-group ${TLIB_LIST} -lsgx_tstdc -lsgx_tcxx -lsgx_tkey_exchange -lsgx_tcrypto -l${SGX_TSVC_LIB} -Wl,--end-group \
+                -Wl,-Bstatic -Wl,-Bsymbolic -Wl,--no-undefined \
+                -Wl,-pie,-eenclave_entry -Wl,--export-dynamic \
+                ${LDSCRIPT_FLAG} \
+                -Wl,--defsym,__ImageBase=0")
+        endif()
     endfunction()
 
     # sign the enclave, according to configurations one-step or two-step signing will be performed.
