@@ -29,6 +29,7 @@ The following functions are provided:
 # build enclave library
 add_enclave_library(target
                     [USE_PREFIX]
+                    [USE_SGXSSL]
                     SRCS src_file1 src_file2 ...
                     EDL edl_file
                     EDL_SEARCH_PATHS path1 path2 ...
@@ -38,6 +39,7 @@ add_enclave_library(target
 # build trusted static library to be linked into enclave library
 add_trusted_library(target
                     [USE_PREFIX]
+                    [USE_SGXSSL]
                     SRCS src_file1 src_file2 ...
                     EDL edl_file
                     EDL_SEARCH_PATHS path1 path2 ...
